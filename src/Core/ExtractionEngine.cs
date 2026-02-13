@@ -215,9 +215,9 @@ public sealed class ExtractionEngine
             var outDir = GetOutputDirectory(msgPath, settings);
             Directory.CreateDirectory(outDir);
 
-            await ExtractFromMessageAsync(
+            duplicateCount = await ExtractFromMessageAsync(
                 msg, msgName, outDir, settings, hashSet,
-                outputPaths, ref duplicateCount, depth: 0, ct);
+                outputPaths, depth: 0, ct);
 
             // Write sentinel on success (even if 0 images extracted)
             if (settings.SkipExisting)
@@ -295,17 +295,18 @@ public sealed class ExtractionEngine
     // Recursive extraction
     // -------------------------------------------------------------------------
 
-    private async Task ExtractFromMessageAsync(
+    private async Task<int> ExtractFromMessageAsync(
         Storage.Message msg,
         string msgNameChain,
         string outDir,
         Settings settings,
         ConcurrentDictionary<string, byte> hashSet,
         List<string> outputPaths,
-        ref int duplicateCount,
         int depth,
         CancellationToken ct)
     {
+        int duplicateCount = 0;
+
         foreach (var attachment in msg.Attachments)
         {
             ct.ThrowIfCancellationRequested();
@@ -333,9 +334,9 @@ public sealed class ExtractionEngine
                         using var embeddedMsg = new Storage.Message(ms);
                         var embeddedName = Path.GetFileNameWithoutExtension(att.FileName ?? "embedded");
                         var chain = $"{msgNameChain}_{SanitiseName(embeddedName)}";
-                        await ExtractFromMessageAsync(
+                        duplicateCount += await ExtractFromMessageAsync(
                             embeddedMsg, chain, outDir, settings, hashSet,
-                            outputPaths, ref duplicateCount, depth + 1, ct);
+                            outputPaths, depth + 1, ct);
                     }
                     catch (Exception ex)
                     {
@@ -379,6 +380,8 @@ public sealed class ExtractionEngine
                 outputPaths.Add(finalPath);
             }
         }
+
+        return duplicateCount;
     }
 
     private static bool IsInlineImage(Storage.Attachment att)
