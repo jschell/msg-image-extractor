@@ -1,5 +1,6 @@
 using MsgImageExtractor.Core;
 using MsgImageExtractor.UI;
+using System.IO;
 using System.Threading;
 using System.Windows;
 using System.Windows.Forms;
