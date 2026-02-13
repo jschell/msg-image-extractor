@@ -1,0 +1,17 @@
+## .NET / C#
+bin/
+obj/
+*.user
+.vs/
+TestResults/
+*.nupkg
+publish/
+
+## General
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.log

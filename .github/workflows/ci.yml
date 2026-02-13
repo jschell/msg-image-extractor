@@ -1,0 +1,17 @@
+name: CI
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      # TODO: add build step
+      # - run: dotnet build MsgImageExtractor.sln -c Release
+      # TODO: add test step
+      # - run: dotnet test MsgImageExtractor.sln -c Release --no-build
