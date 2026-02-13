@@ -6,8 +6,12 @@ name: Release
 #   [bump minor] — 0.1.2 → 0.2.0
 #   [bump major] — 0.1.2 → 1.0.0
 #
-# Requires repo secret: RELEASE_TOKEN (PAT with repo scope)
-# GITHUB_TOKEN cannot be used — GitHub's anti-loop protection silently swallows the release event.
+# Requires repo secret: RELEASE_TOKEN
+#   Fine-grained PAT — repository: this repo only
+#   Permissions: Contents (read and write), Metadata (read, auto-granted)
+#   Classic PAT alternative: repo scope
+# GITHUB_TOKEN cannot be used — GitHub's anti-loop protection silently suppresses
+# push/tag events originating from GITHUB_TOKEN, so release.yml would never re-trigger.
 
 on:
   push:
