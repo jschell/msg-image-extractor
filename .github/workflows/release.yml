@@ -19,15 +19,15 @@ on:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Job 1: detect bump keyword and compute next version
+  # Job 1: read version from .csproj, compute new version, commit + tag
   # ---------------------------------------------------------------------------
   check-release:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      should_release: ${{ steps.check.outputs.should_release }}
-      new_version: ${{ steps.check.outputs.new_version }}
-      tag: ${{ steps.check.outputs.tag }}
+      should_release: ${{ steps.bump.outputs.should_release }}
+      new_version: ${{ steps.bump.outputs.new_version }}
+      tag: ${{ steps.bump.outputs.tag }}
 
     steps:
       - name: Checkout
@@ -36,32 +36,59 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_TOKEN }}
 
-      - name: Detect bump keyword and compute version
-        id: check
+      - name: Compute version, update .csproj, commit and tag
+        id: bump
         shell: bash
         run: |
           MSG="${{ github.event.head_commit.message }}"
-          CURRENT=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          IFS='.' read -r MAJOR MINOR PATCH <<< "${CURRENT#v}"
 
           if echo "$MSG" | grep -q "\[bump major\]"; then
-            NEW="$((MAJOR+1)).0.0"
+            BUMP=major
           elif echo "$MSG" | grep -q "\[bump minor\]"; then
-            NEW="${MAJOR}.$((MINOR+1)).0"
+            BUMP=minor
           elif echo "$MSG" | grep -q "\[bump patch\]"; then
-            NEW="${MAJOR}.${MINOR}.$((PATCH+1))"
+            BUMP=patch
           elif echo "$MSG" | grep -q "\[release\]"; then
-            NEW="${MAJOR}.${MINOR}.${PATCH}"
+            BUMP=none
           else
             echo "No release keyword found — skipping release."
             echo "should_release=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
+          # Read current version from .csproj
+          CURRENT=$(grep -oP '(?<=<Version>)[^<]+' MsgImageExtractor.csproj)
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+
+          case "$BUMP" in
+            major) NEW="$((MAJOR+1)).0.0" ;;
+            minor) NEW="${MAJOR}.$((MINOR+1)).0" ;;
+            patch) NEW="${MAJOR}.${MINOR}.$((PATCH+1))" ;;
+            none)  NEW="${MAJOR}.${MINOR}.${PATCH}" ;;
+          esac
+
+          echo "Bumping $CURRENT → $NEW"
+
+          # Write new version back to .csproj
+          sed -i "s|<Version>${CURRENT}</Version>|<Version>${NEW}</Version>|" MsgImageExtractor.csproj
+
+          # Commit and tag using RELEASE_TOKEN identity
+          # Commit message intentionally omits bump keywords to prevent re-triggering
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git remote set-url origin "https://x-access-token:${{ secrets.RELEASE_TOKEN }}@github.com/${{ github.repository }}"
+
+          if [ "$BUMP" != "none" ]; then
+            git add MsgImageExtractor.csproj
+            git commit -m "Bump version to ${NEW}"
+          fi
+
+          git tag "v${NEW}"
+          git push origin main --follow-tags
+
           echo "should_release=true" >> "$GITHUB_OUTPUT"
           echo "new_version=$NEW" >> "$GITHUB_OUTPUT"
           echo "tag=v$NEW" >> "$GITHUB_OUTPUT"
-          echo "Computed release: v$NEW"
 
   # ---------------------------------------------------------------------------
   # Job 2: build, test, publish, and create GitHub Release
@@ -73,9 +100,11 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      # Checkout the version-bump commit (HEAD of main after check-release pushed)
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: main
           token: ${{ secrets.RELEASE_TOKEN }}
 
       - name: Setup .NET 8
@@ -108,7 +137,6 @@ jobs:
           --self-contained true
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:Version=${{ needs.check-release.outputs.new_version }}
           --output ./publish
 
       - name: Smoke test published executable
