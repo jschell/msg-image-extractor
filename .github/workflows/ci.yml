@@ -1,17 +1,87 @@
 name: CI
+
 on:
   pull_request:
-    branches: [main]
+    branches: [ main ]
+
 jobs:
-  build:
+  build-and-test:
     runs-on: windows-latest
     timeout-minutes: 15
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      # TODO: add build step
-      # - run: dotnet build MsgImageExtractor.sln -c Release
-      # TODO: add test step
-      # - run: dotnet test MsgImageExtractor.sln -c Release --no-build
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore MsgImageExtractor.sln
+
+      - name: Check for vulnerable packages
+        run: dotnet list package --vulnerable --include-transitive
+        continue-on-error: true
+
+      - name: Build
+        run: dotnet build MsgImageExtractor.sln --configuration Release /p:EnableNETAnalyzers=true /p:AnalysisLevel=latest
+
+      - name: Test
+        run: dotnet test tests/MsgImageExtractor.Tests.csproj --configuration Release --no-build --verbosity normal --results-directory ./TestResults --logger "trx;LogFileName=test-results.trx"
+
+      - name: Test with coverage
+        run: dotnet test tests/MsgImageExtractor.Tests.csproj --configuration Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
+
+      - name: Publish single-file executable
+        run: >
+          dotnet publish MsgImageExtractor.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          --output ./publish
+
+      - name: Smoke test published executable
+        shell: pwsh
+        run: |
+          $proc = Start-Process ./publish/MsgImageExtractor.exe -PassThru
+          Start-Sleep -Seconds 5
+          if ($proc.HasExited) {
+            $events = Get-WinEvent -FilterHashtable @{LogName='Application'; Level=2; StartTime=(Get-Date).AddMinutes(-1)} -ErrorAction SilentlyContinue |
+              Where-Object { $_.Message -match 'MsgImageExtractor' } |
+              Select-Object -First 3 -ExpandProperty Message
+            Write-Error "Published exe crashed on startup (exit code: $($proc.ExitCode))"
+            if ($events) {
+              Write-Error "Event Log entries:`n$($events -join "`n---`n")"
+            }
+            exit 1
+          }
+          Write-Host "Smoke test passed: exe stayed alive for 5 seconds"
+          Stop-Process $proc -Force
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: ./TestResults/test-results.trx
+          if-no-files-found: warn
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-reports
+          path: ./TestResults/**/coverage.cobertura.xml
+          if-no-files-found: ignore
