@@ -8,6 +8,9 @@ jobs:
   build-and-test:
     runs-on: windows-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout
@@ -23,7 +26,9 @@ jobs:
           # git log -1 returns "Merge X into Y" — not the actual PR commits.
           # Read from the real PR HEAD SHA and also check the PR title.
           HEAD_SHA="${{ github.event.pull_request.head.sha }}"
-          MSG=$(git log -1 --format=%B "$HEAD_SHA")
+          # The shallow clone (fetch-depth: 1) only contains the synthetic merge
+          # commit, not the actual PR HEAD. Suppress the error and fall back to "".
+          MSG=$(git log -1 --format=%B "$HEAD_SHA" 2>/dev/null || echo "")
           if echo "$PR_TITLE" | grep -q "\[canary\]" || echo "$MSG" | grep -q "\[canary\]"; then
             echo "run_canary=true" >> "$GITHUB_OUTPUT"
             echo "Canary keyword detected — canary steps will run."
