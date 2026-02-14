@@ -37,12 +37,48 @@ jobs:
         run: dotnet build MsgImageExtractor.sln --configuration Release /p:Platform=x64 /p:EnableNETAnalyzers=true /p:AnalysisLevel=latest
 
       - name: Test
-        run: dotnet test tests/MsgImageExtractor.Tests.csproj --configuration Release /p:Platform=x64 --no-build --verbosity normal --results-directory ./TestResults --logger "trx;LogFileName=test-results.trx"
+        run: dotnet test tests/MsgImageExtractor.Tests.csproj --configuration Release /p:Platform=x64 --no-build --filter "Category!=canary" --verbosity normal --results-directory ./TestResults --logger "trx;LogFileName=test-results.trx"
         continue-on-error: true
 
       - name: Test with coverage
-        run: dotnet test tests/MsgImageExtractor.Tests.csproj --configuration Release /p:Platform=x64 --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
+        run: dotnet test tests/MsgImageExtractor.Tests.csproj --configuration Release /p:Platform=x64 --no-build --filter "Category!=canary" --collect:"XPlat Code Coverage" --results-directory ./TestResults
         continue-on-error: true
+
+      - name: Run canary (expected to fail — validates PR comment posting)
+        id: canary
+        if: github.event_name == 'pull_request'
+        run: dotnet test tests/MsgImageExtractor.Tests.csproj --configuration Release /p:Platform=x64 --no-build --filter "Category=canary" --results-directory ./TestResults --logger "trx;LogFileName=canary-results.trx"
+        continue-on-error: true
+
+      - name: Post canary result to PR
+        if: github.event_name == 'pull_request' && steps.canary.outcome == 'failure'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $lines = [System.Collections.Generic.List[string]]::new()
+          $lines.Add("### Canary — CI comment posting validated :white_check_mark:")
+          $lines.Add("")
+
+          $trx = Get-ChildItem ./TestResults/canary-results.trx -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($trx) {
+            [xml]$xml = Get-Content $trx.FullName
+            $failed = $xml.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq 'Failed' }
+            if ($failed) {
+              $lines.Add("#### Failed canary tests (expected)")
+              foreach ($t in $failed) {
+                $lines.Add("**``$($t.testName)``**")
+                $lines.Add('```')
+                $lines.Add($t.Output.ErrorInfo.Message.Trim())
+                $lines.Add('```')
+                $lines.Add("")
+              }
+            }
+          }
+
+          $lines.Add("_Archive ``tests/CICommentCanaryTests.cs`` once this comment is confirmed._")
+          $body = $lines -join "`n"
+          gh pr comment ${{ github.event.pull_request.number }} --body $body
 
       - name: Publish single-file executable
         run: >
