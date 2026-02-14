@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace MsgImageExtractor.Core;
 
 public enum LogLevel { Info, Warning, Error }
