@@ -13,6 +13,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check for [canary] keyword
+        id: check-canary
+        shell: bash
+        run: |
+          MSG=$(git log -1 --format=%B)
+          if echo "$MSG" | grep -q "\[canary\]"; then
+            echo "run_canary=true" >> "$GITHUB_OUTPUT"
+            echo "Canary keyword detected — canary steps will run."
+          else
+            echo "run_canary=false" >> "$GITHUB_OUTPUT"
+            echo "No [canary] keyword — canary steps skipped."
+          fi
+
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
@@ -46,12 +59,12 @@ jobs:
 
       - name: Run canary (expected to fail — validates PR comment posting)
         id: canary
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && steps.check-canary.outputs.run_canary == 'true'
         run: dotnet test tests/MsgImageExtractor.Tests.csproj --configuration Release /p:Platform=x64 --no-build --filter "Category=canary" --results-directory ./TestResults --logger "trx;LogFileName=canary-results.trx"
         continue-on-error: true
 
       - name: Post canary result to PR
-        if: github.event_name == 'pull_request' && steps.canary.outcome == 'failure'
+        if: github.event_name == 'pull_request' && steps.check-canary.outputs.run_canary == 'true' && steps.canary.outcome == 'failure'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
