@@ -16,9 +16,15 @@ jobs:
       - name: Check for [canary] keyword
         id: check-canary
         shell: bash
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          MSG=$(git log -1 --format=%B)
-          if echo "$MSG" | grep -q "\[canary\]"; then
+          # pull_request events check out a synthetic merge commit, so
+          # git log -1 returns "Merge X into Y" — not the actual PR commits.
+          # Read from the real PR HEAD SHA and also check the PR title.
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          MSG=$(git log -1 --format=%B "$HEAD_SHA")
+          if echo "$PR_TITLE" | grep -q "\[canary\]" || echo "$MSG" | grep -q "\[canary\]"; then
             echo "run_canary=true" >> "$GITHUB_OUTPUT"
             echo "Canary keyword detected — canary steps will run."
           else
