@@ -127,7 +127,7 @@ jobs:
         run: dotnet build MsgImageExtractor.sln --configuration Release /p:Platform=x64
 
       - name: Test
-        run: dotnet test tests/MsgImageExtractor.Tests.csproj --configuration Release /p:Platform=x64 --no-build --verbosity normal
+        run: dotnet test tests/MsgImageExtractor.Tests.csproj --configuration Release /p:Platform=x64 --no-build --filter "Category!=canary" --verbosity normal
 
       - name: Publish single-file executable
         run: >

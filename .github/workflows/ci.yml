@@ -50,6 +50,7 @@ jobs:
         run: dotnet build MsgImageExtractor.sln --configuration Release /p:Platform=x64 /p:EnableNETAnalyzers=true /p:AnalysisLevel=latest
 
       - name: Test
+        id: test
         run: dotnet test tests/MsgImageExtractor.Tests.csproj --configuration Release /p:Platform=x64 --no-build --filter "Category!=canary" --verbosity normal --results-directory ./TestResults --logger "trx;LogFileName=test-results.trx"
         continue-on-error: true
 
@@ -138,7 +139,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Post failure summary to PR
-        if: failure() && github.event_name == 'pull_request'
+        if: (failure() || steps.test.outcome == 'failure') && github.event_name == 'pull_request'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
