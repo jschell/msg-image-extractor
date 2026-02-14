@@ -1,5 +1,6 @@
 using MsgImageExtractor.Core;
 using System.Collections.Concurrent;
+using System.IO;
 using Xunit;
 
 namespace MsgImageExtractor.Tests.Core;
