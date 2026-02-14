@@ -50,7 +50,8 @@ public sealed class Logger : IDisposable
             _currentDate = today;
             Directory.CreateDirectory(_logDirectory);
             var path = Path.Combine(_logDirectory, $"msgextractor-{today:yyyy-MM-dd}.log");
-            _writer = new StreamWriter(path, append: true) { AutoFlush = true };
+            var fs = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
+            _writer = new StreamWriter(fs) { AutoFlush = true };
         }
     }
 

@@ -50,12 +50,13 @@ public sealed class ExtractionQueue : IDisposable
     private long _failedCount;
     private long _skippedCount;
     private long _droppedCount;
+    private long _pendingRetryCount;
 
     public long ExtractedCount => Interlocked.Read(ref _extractedCount);
     public long FailedCount => Interlocked.Read(ref _failedCount);
     public long SkippedCount => Interlocked.Read(ref _skippedCount);
     public long DroppedCount => Interlocked.Read(ref _droppedCount);
-    public int PendingRetryCount => _retryChannel.Reader.Count;
+    public int PendingRetryCount => (int)Interlocked.Read(ref _pendingRetryCount);
 
     // -------------------------------------------------------------------------
     // First-drop notification guard
@@ -87,7 +88,7 @@ public sealed class ExtractionQueue : IDisposable
 
         _channel = Channel.CreateBounded<string>(new BoundedChannelOptions(ChannelCapacity)
         {
-            FullMode = BoundedChannelFullMode.DropWrite,
+            FullMode = BoundedChannelFullMode.Wait,
             SingleReader = false,
             SingleWriter = false
         });
@@ -196,7 +197,8 @@ public sealed class ExtractionQueue : IDisposable
     private async Task WorkerLoopAsync()
     {
         var ct = _shutdownCts.Token;
-
+        try
+        {
         await foreach (var path in _channel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
         {
             // In-flight dedup check
@@ -268,6 +270,8 @@ public sealed class ExtractionQueue : IDisposable
                 QueueCountChanged?.Invoke(_channel.Reader.Count);
             }
         }
+        } // end outer try
+        catch (OperationCanceledException) { /* shutdown — channel read cancelled */ }
     }
 
     // -------------------------------------------------------------------------
@@ -278,6 +282,7 @@ public sealed class ExtractionQueue : IDisposable
 
     private void ScheduleRetry(string path, int attempt)
     {
+        Interlocked.Increment(ref _pendingRetryCount);
         var cts = _shutdownCts;
         _ = Task.Run(async () =>
         {
@@ -286,7 +291,10 @@ public sealed class ExtractionQueue : IDisposable
                 await Task.Delay(TimeSpan.FromSeconds(30), cts.Token).ConfigureAwait(false);
                 _retryChannel.Writer.TryWrite(new RetryEntry(path, attempt));
             }
-            catch (OperationCanceledException) { /* shutdown */ }
+            catch (OperationCanceledException)
+            {
+                Interlocked.Decrement(ref _pendingRetryCount);
+            }
         }, cts.Token);
     }
 
@@ -297,12 +305,10 @@ public sealed class ExtractionQueue : IDisposable
         {
             await foreach (var entry in _retryChannel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
             {
-                // Re-submit to main channel; if attempt 1 fails again → mark failed
+                Interlocked.Decrement(ref _pendingRetryCount);
+
                 if (entry.Attempt == 1)
                 {
-                    // Re-queue to main channel; result will be checked again by worker
-                    // We mark as "second attempt" by using a wrapper approach:
-                    // Enqueue back — if FileInUse again, increment failed this time
                     if (!_channel.Writer.TryWrite(entry.Path))
                     {
                         Interlocked.Increment(ref _failedCount);
