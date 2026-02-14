@@ -13,8 +13,6 @@ public enum LogLevel { Info, Warning, Error }
 public sealed class Logger : IDisposable
 {
     private readonly string _logDirectory;
-    private StreamWriter? _writer;
-    private DateOnly _currentDate;
     private readonly object _lock = new();
 
     public Logger(string logDirectory)
@@ -30,45 +28,22 @@ public sealed class Logger : IDisposable
     {
         lock (_lock)
         {
-            EnsureWriter();
+            Directory.CreateDirectory(_logDirectory);
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            var path = Path.Combine(_logDirectory, $"msgextractor-{today:yyyy-MM-dd}.log");
             var prefix = level switch
             {
                 LogLevel.Warning => "WARN",
                 LogLevel.Error => "ERROR",
                 _ => "INFO"
             };
-            _writer!.WriteLine($"{DateTime.Now:HH:mm:ss.fff} [{prefix}] {message}");
+            using var fs = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
+            using var writer = new StreamWriter(fs);
+            writer.WriteLine($"{DateTime.Now:HH:mm:ss.fff} [{prefix}] {message}");
         }
     }
 
-    private void EnsureWriter()
-    {
-        var today = DateOnly.FromDateTime(DateTime.Now);
-        if (_writer is null || today != _currentDate)
-        {
-            _writer?.Dispose();
-            _currentDate = today;
-            Directory.CreateDirectory(_logDirectory);
-            var path = Path.Combine(_logDirectory, $"msgextractor-{today:yyyy-MM-dd}.log");
-            var fs = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
-            _writer = new StreamWriter(fs) { AutoFlush = true };
-        }
-    }
+    public void Flush() { } // no-op — no persistent handle
 
-    public void Flush()
-    {
-        lock (_lock)
-        {
-            _writer?.Flush();
-        }
-    }
-
-    public void Dispose()
-    {
-        lock (_lock)
-        {
-            _writer?.Dispose();
-            _writer = null;
-        }
-    }
+    public void Dispose() { } // no-op — no persistent resources
 }
