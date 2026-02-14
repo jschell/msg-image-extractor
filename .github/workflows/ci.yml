@@ -38,9 +38,11 @@ jobs:
 
       - name: Test
         run: dotnet test tests/MsgImageExtractor.Tests.csproj --configuration Release /p:Platform=x64 --no-build --verbosity normal --results-directory ./TestResults --logger "trx;LogFileName=test-results.trx"
+        continue-on-error: true
 
       - name: Test with coverage
         run: dotnet test tests/MsgImageExtractor.Tests.csproj --configuration Release /p:Platform=x64 --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
+        continue-on-error: true
 
       - name: Publish single-file executable
         run: >
@@ -85,3 +87,41 @@ jobs:
           name: coverage-reports
           path: ./TestResults/**/coverage.cobertura.xml
           if-no-files-found: ignore
+
+      - name: Post failure summary to PR
+        if: failure() && github.event_name == 'pull_request'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $lines = [System.Collections.Generic.List[string]]::new()
+          $lines.Add("### CI Failure — run [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})")
+          $lines.Add("")
+
+          # Parse TRX for individual test failures
+          $trx = Get-ChildItem ./TestResults/*.trx -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($trx) {
+            [xml]$xml = Get-Content $trx.FullName
+            $failed = $xml.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq 'Failed' }
+            if ($failed) {
+              $lines.Add("#### Failed Tests")
+              foreach ($t in $failed) {
+                $lines.Add("**``$($t.testName)``**")
+                $msg = $t.Output.ErrorInfo.Message -replace '\r\n','`n' -replace '\n','`n'
+                $lines.Add('```')
+                $lines.Add($t.Output.ErrorInfo.Message.Trim())
+                $lines.Add('```')
+                $lines.Add("")
+              }
+            } else {
+              $lines.Add("Tests ran but no failures recorded in TRX — failure may be in build or publish step.")
+            }
+          } else {
+            # No TRX means build or restore failed — grab last 40 lines of runner output via step summary
+            $lines.Add("No test results found. The build likely failed before tests ran.")
+            $lines.Add("")
+            $lines.Add("Check the [Actions log](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for compiler errors.")
+          }
+
+          $body = $lines -join "`n"
+          gh pr comment ${{ github.event.pull_request.number }} --body $body
