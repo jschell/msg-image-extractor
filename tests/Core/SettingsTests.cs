@@ -1,4 +1,5 @@
 using MsgImageExtractor.Core;
+using System.IO;
 using System.Text.Json;
 using Xunit;
 
