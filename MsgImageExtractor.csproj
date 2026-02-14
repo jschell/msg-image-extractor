@@ -14,7 +14,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <Platforms>x64</Platforms>
-    <Version>0.1.8</Version>
+    <Version>0.1.9</Version>
   </PropertyGroup>
 
   <!-- Publish-only settings -->
