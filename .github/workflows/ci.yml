@@ -27,20 +27,20 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Restore dependencies
-        run: dotnet restore MsgImageExtractor.sln
+        run: dotnet restore MsgImageExtractor.sln /p:Platform=x64
 
       - name: Check for vulnerable packages
         run: dotnet list package --vulnerable --include-transitive
         continue-on-error: true
 
       - name: Build
-        run: dotnet build MsgImageExtractor.sln --configuration Release /p:EnableNETAnalyzers=true /p:AnalysisLevel=latest
+        run: dotnet build MsgImageExtractor.sln --configuration Release /p:Platform=x64 /p:EnableNETAnalyzers=true /p:AnalysisLevel=latest
 
       - name: Test
-        run: dotnet test tests/MsgImageExtractor.Tests.csproj --configuration Release --no-build --verbosity normal --results-directory ./TestResults --logger "trx;LogFileName=test-results.trx"
+        run: dotnet test tests/MsgImageExtractor.Tests.csproj --configuration Release /p:Platform=x64 --no-build --verbosity normal --results-directory ./TestResults --logger "trx;LogFileName=test-results.trx"
 
       - name: Test with coverage
-        run: dotnet test tests/MsgImageExtractor.Tests.csproj --configuration Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
+        run: dotnet test tests/MsgImageExtractor.Tests.csproj --configuration Release /p:Platform=x64 --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
 
       - name: Publish single-file executable
         run: >
