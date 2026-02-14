@@ -7,6 +7,9 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>MsgImageExtractor</AssemblyName>
     <RootNamespace>MsgImageExtractor</RootNamespace>
+    <Authors>J. Schell</Authors>
+    <Copyright>Copyright © 2026 J. Schell</Copyright>
+    <Description>Automatically monitors folders and extracts image attachments from Outlook .msg files in real-time.</Description>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
@@ -14,8 +17,23 @@
     <Version>0.1.2</Version>
   </PropertyGroup>
 
+  <!-- Publish-only settings -->
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true' Or '$(IsPublishing)' == 'true'">
+    <SelfContained>true</SelfContained>
+    <PublishTrimmed>false</PublishTrimmed>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+
   <ItemGroup>
-    <Compile Remove="tests\**\*.cs" />
+    <ApplicationDefinition Include="src\App.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </ApplicationDefinition>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="tests\**" />
+    <EmbeddedResource Remove="tests\**" />
+    <None Remove="tests\**" />
   </ItemGroup>
 
   <ItemGroup>

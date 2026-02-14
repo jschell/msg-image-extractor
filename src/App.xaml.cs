@@ -227,7 +227,6 @@ public partial class App : System.Windows.Application
             : Directory.GetFiles(folder, "*.msg", SearchOption.TopDirectoryOnly);
 
         int filesProcessed = 0;
-        int imagesExtracted = 0;
 
         foreach (var path in files)
         {

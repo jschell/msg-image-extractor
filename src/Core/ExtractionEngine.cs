@@ -238,7 +238,9 @@ public sealed class ExtractionEngine
                 ErrorMessage: null,
                 Duration: sw.Elapsed);
         }
-        catch (MsgReader.Exceptions.MRPasswordException ex)
+        catch (MsgReader.Exceptions.MRFileTypeNotSupported ex)
+            when (ex.Message.Contains("password", StringComparison.OrdinalIgnoreCase)
+               || ex.Message.Contains("encrypt", StringComparison.OrdinalIgnoreCase))
         {
             _logger.Warning($"Password-protected: {msgPath} — {ex.Message}");
             return new ExtractionResult(
