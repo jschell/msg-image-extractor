@@ -39,8 +39,11 @@ jobs:
       - name: Compute version, update .csproj, commit and tag
         id: bump
         shell: bash
+        env:
+          # Passed via env, never interpolated into the script: commit messages can
+          # contain quotes, <, $(...) etc. that would otherwise be executed by bash.
+          MSG: ${{ github.event.head_commit.message }}
         run: |
-          MSG="${{ github.event.head_commit.message }}"
 
           if echo "$MSG" | grep -q "\[bump major\]"; then
             BUMP=major
