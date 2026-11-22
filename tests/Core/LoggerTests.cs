@@ -90,4 +90,39 @@ public sealed class LoggerTests : IDisposable
         var lines = File.ReadAllLines(files[0]);
         Assert.Equal(3, lines.Length);
     }
+
+    [Fact]
+    public void CleanOldLogs_DeletesOnlyLogsOlderThanRetention()
+    {
+        var today = DateTime.Now.Date;
+        string Make(DateTime d)
+        {
+            var path = Path.Combine(_tempDir, $"msgextractor-{d:yyyy-MM-dd}.log");
+            File.WriteAllText(path, "x");
+            return path;
+        }
+        var old1 = Make(today.AddDays(-31));
+        var old2 = Make(today.AddDays(-90));
+        var edge = Make(today.AddDays(-30));
+        var recent = Make(today.AddDays(-1));
+        var unrelated = Path.Combine(_tempDir, "notes.log");
+        File.WriteAllText(unrelated, "keep");
+
+        using var logger = new Logger(_tempDir);
+        var deleted = logger.CleanOldLogs(30);
+
+        Assert.Equal(2, deleted);
+        Assert.False(File.Exists(old1));
+        Assert.False(File.Exists(old2));
+        Assert.True(File.Exists(edge));
+        Assert.True(File.Exists(recent));
+        Assert.True(File.Exists(unrelated));
+    }
+
+    [Fact]
+    public void CleanOldLogs_MissingDirectory_ReturnsZero()
+    {
+        using var logger = new Logger(Path.Combine(_tempDir, "does-not-exist"));
+        Assert.Equal(0, logger.CleanOldLogs());
+    }
 }

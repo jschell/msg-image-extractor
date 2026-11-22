@@ -45,6 +45,7 @@ public partial class App : System.Windows.Application
     private string AppDataDir =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppDataFolder);
     private string LogsDir => Path.Combine(AppDataDir, "logs");
+    private const int LogRetentionDays = 30;
     private string ProcessedDir => Path.Combine(AppDataDir, "processed");
 
     // -------------------------------------------------------------------------
@@ -84,7 +85,11 @@ public partial class App : System.Windows.Application
 
         // 4. Logger (opened after directory creation)
         _logger = new Logger(LogsDir);
-        _logger.Info("Application starting.");
+        RegisterCrashHandlers();
+        _logger.Info($"Application starting (version {typeof(App).Assembly.GetName().Version}).");
+        var cleaned = _logger.CleanOldLogs(LogRetentionDays);
+        if (cleaned > 0)
+            _logger.Info($"Deleted {cleaned} log file(s) older than {LogRetentionDays} days.");
 
         // Keep the Run-key entry pointing at the current exe path
         if (_settings.StartWithWindows && !StartupRegistration.Apply(true, out var regError))
@@ -185,6 +190,7 @@ public partial class App : System.Windows.Application
         _trayIcon.ProcessExistingRequested += OnProcessExisting;
         _trayIcon.ExtractFromFolderRequested += OnExtractFromFolder;
         _trayIcon.SettingsRequested += () => CreateSettingsWindow().Show();
+        _trayIcon.OpenLogFolderRequested += OnOpenLogFolder;
         _trayIcon.ExitRequested += () => Shutdown();
     }
 
@@ -325,6 +331,52 @@ public partial class App : System.Windows.Application
         // Notify after a short wait — for a proper async batch, a dedicated batch runner would be used
         await Task.Delay(100);
         _notifications?.NotifyBatchComplete(filesProcessed, (int)_queue!.ExtractedCount);
+    }
+
+    // -------------------------------------------------------------------------
+    // Logs: open folder, crash handlers
+    // -------------------------------------------------------------------------
+
+    private void OnOpenLogFolder()
+    {
+        try
+        {
+            Directory.CreateDirectory(LogsDir);
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = LogsDir,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warning($"Could not open log folder '{LogsDir}': {ex.Message}");
+            _notifications?.ShowWarning($"Could not open log folder: {LogsDir}");
+        }
+    }
+
+    /// <summary>
+    /// Write otherwise-silent crashes to the log. UI-thread exceptions are logged and
+    /// swallowed so the tray app keeps running; fatal background exceptions are logged
+    /// before the process terminates.
+    /// </summary>
+    private void RegisterCrashHandlers()
+    {
+        DispatcherUnhandledException += (_, e) =>
+        {
+            _logger?.Error($"Unhandled UI exception: {e.Exception}");
+            _notifications?.ShowWarning("An unexpected error occurred. Details are in the log (tray menu → Open Log Folder).");
+            e.Handled = true;
+        };
+
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            _logger?.Error($"Fatal unhandled exception (terminating={e.IsTerminating}): {e.ExceptionObject}");
+
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            _logger?.Error($"Unobserved task exception: {e.Exception}");
+            e.SetObserved();
+        };
     }
 
     // -------------------------------------------------------------------------

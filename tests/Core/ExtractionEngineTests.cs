@@ -205,4 +205,43 @@ public sealed class ExtractionEngineTests : IDisposable
         Assert.Equal("EmailWithAttachments_peterpan.jpg", Path.GetFileName(output));
         Assert.True(new FileInfo(output).Length > 10 * 1024);
     }
+
+    // EmailWithInnerMailAndAttachments.msg: OUTER 1.pdf, OUTER 2.pdf and an embedded
+    // e-mail "Inner mail" containing INNER 1.pdf, INNER 2.pdf (15 KB each). No sample has
+    // an image inside an embedded message, so treat .pdf as an "image" for these tests.
+    private ExtractionEngine NewPdfEngine() =>
+        new(Path.Combine(_tempDir, "processed"), new Logger(Path.Combine(_tempDir, "logs")),
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".pdf" });
+
+    [Fact]
+    public async Task ExtractAsync_RecurseEmbeddedMessages_ExtractsFromInnerMessage()
+    {
+        _settings.RecurseEmbeddedMessages = true;
+
+        var result = await NewPdfEngine().ExtractAsync(
+            Sample("EmailWithInnerMailAndAttachments.msg"), _settings, new ConcurrentDictionary<string, byte>(), CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        var names = result.OutputPaths.Select(Path.GetFileName).OrderBy(n => n).ToArray();
+        Assert.Equal(new[]
+        {
+            "EmailWithInnerMailAndAttachments_Inner mail_INNER 1.pdf",
+            "EmailWithInnerMailAndAttachments_Inner mail_INNER 2.pdf",
+            "EmailWithInnerMailAndAttachments_OUTER 1.pdf",
+            "EmailWithInnerMailAndAttachments_OUTER 2.pdf",
+        }, names);
+    }
+
+    [Fact]
+    public async Task ExtractAsync_RecurseDisabled_SkipsInnerMessage()
+    {
+        _settings.RecurseEmbeddedMessages = false;
+
+        var result = await NewPdfEngine().ExtractAsync(
+            Sample("EmailWithInnerMailAndAttachments.msg"), _settings, new ConcurrentDictionary<string, byte>(), CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        Assert.Equal(2, result.ExtractedCount);
+        Assert.All(result.OutputPaths, p => Assert.Contains("OUTER", Path.GetFileName(p)));
+    }
 }

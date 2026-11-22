@@ -18,6 +18,7 @@ public sealed class SystemTrayIcon : IDisposable
     private readonly ToolStripMenuItem _pauseResumeItem;
     private readonly ToolStripMenuItem _processExistingItem;
     private readonly ToolStripMenuItem _extractFromFolderItem;
+    private readonly ToolStripMenuItem _openLogsItem;
     private readonly ToolStripMenuItem _settingsItem;
     private readonly ToolStripMenuItem _exitItem;
 
@@ -31,6 +32,7 @@ public sealed class SystemTrayIcon : IDisposable
     public event Action? ResumeRequested;
     public event Action? ProcessExistingRequested;
     public event Action? ExtractFromFolderRequested;
+    public event Action? OpenLogFolderRequested;
     public event Action? SettingsRequested;
     public event Action? ExitRequested;
 
@@ -50,6 +52,7 @@ public sealed class SystemTrayIcon : IDisposable
         _extractFromFolderItem = new ToolStripMenuItem("Extract From Folder...", null, OnExtractFromFolder);
         _settingsItem = new ToolStripMenuItem("Settings...", null, OnSettings);
         _settingsItem.Font = new System.Drawing.Font(_settingsItem.Font, System.Drawing.FontStyle.Bold); // double-click default
+        _openLogsItem = new ToolStripMenuItem("Open Log Folder", null, (_, _) => OpenLogFolderRequested?.Invoke());
         _exitItem = new ToolStripMenuItem("Exit", null, OnExit);
 
         var menu = new ContextMenuStrip();
@@ -62,6 +65,7 @@ public sealed class SystemTrayIcon : IDisposable
             _extractFromFolderItem,
             new ToolStripSeparator(),
             _settingsItem,
+            _openLogsItem,
             new ToolStripSeparator(),
             _exitItem
         });
