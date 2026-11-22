@@ -179,6 +179,10 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          # Pass the PAT as the `token` input. Since action-gh-release v2.5.3 the input
+          # (which defaults to the read-only github.token) takes precedence over the
+          # GITHUB_TOKEN env var, so setting only the env var no longer works.
+          token: ${{ secrets.RELEASE_TOKEN }}
           tag_name: ${{ needs.check-release.outputs.tag }}
           name: Release ${{ needs.check-release.outputs.new_version }}
           generate_release_notes: true
