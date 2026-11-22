@@ -41,7 +41,7 @@ public enum ExtractionFailureReason
 /// </summary>
 public sealed class ExtractionEngine
 {
-    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> DefaultImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".heic", ".webp"
     };
@@ -56,6 +56,7 @@ public sealed class ExtractionEngine
 
     private readonly string _processedDir;
     private readonly Logger _logger;
+    private readonly IReadOnlySet<string> _imageExtensions;
 
     static ExtractionEngine()
     {
@@ -67,9 +68,14 @@ public sealed class ExtractionEngine
     }
 
     public ExtractionEngine(string processedDir, Logger logger)
+        : this(processedDir, logger, DefaultImageExtensions) { }
+
+    /// <summary>Test hook: override which attachment extensions are extracted.</summary>
+    internal ExtractionEngine(string processedDir, Logger logger, IReadOnlySet<string> imageExtensions)
     {
         _processedDir = processedDir;
         _logger = logger;
+        _imageExtensions = imageExtensions;
     }
 
     // -------------------------------------------------------------------------
@@ -323,11 +329,43 @@ public sealed class ExtractionEngine
         {
             ct.ThrowIfCancellationRequested();
 
+            // Embedded e-mails (attached Outlook items) are surfaced by MsgReader as
+            // Storage.Message objects, not as Storage.Attachment files named *.msg.
+            if (attachment is Storage.Message embedded)
+            {
+                if (!settings.RecurseEmbeddedMessages) continue;
+
+                if (depth >= MaxRecurseDepth)
+                {
+                    _logger.Warning(
+                        $"Recursion depth cap ({MaxRecurseDepth}) reached; skipping embedded message in {msgNameChain}");
+                    continue;
+                }
+
+                try
+                {
+                    var embeddedName = Path.GetFileNameWithoutExtension(
+                        embedded.FileName ?? embedded.Subject ?? "embedded");
+                    if (string.IsNullOrWhiteSpace(embeddedName)) embeddedName = "embedded";
+                    var chain = $"{msgNameChain}_{SanitiseName(embeddedName)}";
+                    // Owned and disposed by the parent message — do not dispose here.
+                    duplicateCount += await ExtractFromMessageAsync(
+                        embedded, chain, outDir, settings, hashSet,
+                        outputPaths, depth + 1, ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.Warning($"Failed to read embedded message in {msgNameChain}: {ex.Message}");
+                }
+
+                continue;
+            }
+
             if (attachment is Storage.Attachment att)
             {
                 var ext = Path.GetExtension(att.FileName ?? string.Empty);
 
-                // Recurse into embedded .msg if enabled
+                // A .msg attached as a plain file (by value) — recurse if enabled
                 if (settings.RecurseEmbeddedMessages &&
                     string.Equals(ext, ".msg", StringComparison.OrdinalIgnoreCase))
                 {
@@ -359,7 +397,7 @@ public sealed class ExtractionEngine
                 }
 
                 // Image attachment
-                if (!ImageExtensions.Contains(ext)) continue;
+                if (!_imageExtensions.Contains(ext)) continue;
 
                 // Inline image filter
                 if (!settings.ExtractInlineImages && IsInlineImage(att)) continue;

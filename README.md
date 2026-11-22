@@ -33,9 +33,12 @@ Double-click `MsgImageExtractor.exe` — the app starts in the system tray and k
 | Batch extract another folder | Right-click tray icon → Extract From Folder… |
 | Pause / Resume | Right-click tray icon → Pause / Resume |
 | Start automatically at sign-in | Settings → *Start with Windows* |
+| View logs | Right-click tray icon → Open Log Folder |
 | Exit | Right-click tray icon → Exit |
 
 With *Start with Windows* enabled, the app launches silently at sign-in (`--minimized`) and begins monitoring the watched folder. Launching it a second time shows an "already running" message instead of starting a duplicate.
+
+Logs are written to `%APPDATA%\MsgImageExtractor\logs\` (one file per day, kept for 30 days). Extraction failures and unexpected crashes are recorded there.
 
 Images are extracted **alongside** `.msg` files by default (*SameFolder* mode). You can switch to a fixed output directory in Settings.
 

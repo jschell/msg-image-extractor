@@ -43,6 +43,30 @@ public sealed class Logger : IDisposable
         }
     }
 
+    /// <summary>
+    /// Delete msgextractor-*.log files whose date is older than <paramref name="retentionDays"/>.
+    /// Returns the number of files deleted. Never throws.
+    /// </summary>
+    public int CleanOldLogs(int retentionDays = 30)
+    {
+        int deleted = 0;
+        try
+        {
+            if (!Directory.Exists(_logDirectory)) return 0;
+            var cutoff = DateOnly.FromDateTime(DateTime.Now).AddDays(-retentionDays);
+            foreach (var file in Directory.GetFiles(_logDirectory, "msgextractor-*.log"))
+            {
+                var stem = Path.GetFileNameWithoutExtension(file)["msgextractor-".Length..];
+                if (DateOnly.TryParseExact(stem, "yyyy-MM-dd", out var date) && date < cutoff)
+                {
+                    try { File.Delete(file); deleted++; } catch { /* in use — try next start */ }
+                }
+            }
+        }
+        catch { /* best effort */ }
+        return deleted;
+    }
+
     public void Flush() { } // no-op — no persistent handle
 
     public void Dispose() { } // no-op — no persistent resources
