@@ -158,6 +158,16 @@ public sealed class ExtractionQueue : IDisposable
         }
     }
 
+    /// <summary>
+    /// Enqueue with backpressure: waits for channel space instead of dropping.
+    /// Used for bulk scans (e.g. processing existing files) that can exceed channel capacity.
+    /// </summary>
+    public async ValueTask EnqueueAsync(string path, CancellationToken ct = default)
+    {
+        await _channel.Writer.WriteAsync(path, ct).ConfigureAwait(false);
+        QueueCountChanged?.Invoke(_channel.Reader.Count);
+    }
+
     // -------------------------------------------------------------------------
     // Pause / Resume
     // -------------------------------------------------------------------------

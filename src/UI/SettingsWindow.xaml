@@ -112,6 +112,9 @@
         <!-- ── Action buttons ────────────────────────────────────────────  -->
         <StackPanel Grid.Row="13" Orientation="Vertical">
             <Separator Margin="0,0,0,8"/>
+            <Button Content="Process existing files now"
+                    Click="ProcessExisting_Click"
+                    ToolTip="Queues every .msg file already in the watched folder. Previously processed files are skipped."/>
             <Button Content="Reset processed file history"
                     Click="ResetHistory_Click"
                     ToolTip="Deletes all sentinel files. All .msg files will be re-extracted on next run."/>

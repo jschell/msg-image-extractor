@@ -20,6 +20,9 @@ public partial class SettingsWindow : Window
     // Raised when WatchedFolder is set for the first time (first-run flow)
     public event Action<string>? WatchedFolderSelected;
 
+    // Raised when the user clicks "Process existing files now"
+    public event Action? ProcessExistingRequested;
+
     public SettingsWindow(Settings settings, ExtractionQueue? queue, string processedDir)
     {
         InitializeComponent();
@@ -195,6 +198,17 @@ public partial class SettingsWindow : Window
             System.Windows.MessageBox.Show($"Failed to clear history: {ex.Message}",
                 "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private void ProcessExisting_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(_settings.WatchedFolder))
+        {
+            System.Windows.MessageBox.Show("Choose a watched folder first.", "Process Existing Files",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        ProcessExistingRequested?.Invoke();
     }
 
     private void ClearDedupCache_Click(object sender, RoutedEventArgs e)
