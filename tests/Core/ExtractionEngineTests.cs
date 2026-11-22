@@ -170,4 +170,39 @@ public sealed class ExtractionEngineTests : IDisposable
         Assert.True(result.IsSuccess);
         Assert.Equal(0, result.ExtractedCount);
     }
+
+    // -------------------------------------------------------------------------
+    // Real .msg files (tests/SampleFiles, from the MSGReader project)
+    // -------------------------------------------------------------------------
+
+    private static string Sample(string name) =>
+        Path.Combine(AppContext.BaseDirectory, "SampleFiles", name);
+
+    private ExtractionEngine NewEngine() =>
+        new(Path.Combine(_tempDir, "processed"), new Logger(Path.Combine(_tempDir, "logs")));
+
+    [Fact]
+    public async Task ExtractAsync_RtfBodyMessage_Succeeds()
+    {
+        // Regression: without the code-pages encoding provider, MsgReader throws
+        // "'Windows-1252' is not a supported encoding name" for RTF bodies.
+        var result = await NewEngine().ExtractAsync(
+            Sample("RtfSampleEmail.msg"), _settings, new ConcurrentDictionary<string, byte>(), CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ExtractAsync_MessageWithImages_ExtractsNonInlineImage()
+    {
+        // EmailWithAttachments.msg: peterpan.jpg (38 KB, attachment) + tinkerbell.jpg (inline)
+        var result = await NewEngine().ExtractAsync(
+            Sample("EmailWithAttachments.msg"), _settings, new ConcurrentDictionary<string, byte>(), CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        Assert.Equal(1, result.ExtractedCount);
+        var output = Assert.Single(result.OutputPaths);
+        Assert.Equal("EmailWithAttachments_peterpan.jpg", Path.GetFileName(output));
+        Assert.True(new FileInfo(output).Length > 10 * 1024);
+    }
 }
