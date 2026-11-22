@@ -57,6 +57,15 @@ public sealed class ExtractionEngine
     private readonly string _processedDir;
     private readonly Logger _logger;
 
+    static ExtractionEngine()
+    {
+        // MsgReader decodes RTF/HTML bodies with legacy code pages (e.g. Windows-1252).
+        // .NET (Core) ships only Unicode/ASCII/Latin-1 unless the code-pages provider is
+        // registered — even on Windows. Without this every message with an RTF body fails,
+        // and MsgReader's Font type initializer stays broken for the rest of the process.
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+    }
+
     public ExtractionEngine(string processedDir, Logger logger)
     {
         _processedDir = processedDir;

@@ -18,6 +18,9 @@
     <PackageReference Include="MsgReader" Version="6.*" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="SampleFiles\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\MsgImageExtractor.csproj" />
   </ItemGroup>
 </Project>
