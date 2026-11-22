@@ -6,6 +6,7 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>MsgImageExtractor</AssemblyName>
+    <ApplicationIcon>assets\icon.ico</ApplicationIcon>
     <RootNamespace>MsgImageExtractor</RootNamespace>
     <Authors>J. Schell</Authors>
     <Copyright>Copyright © 2026 J. Schell</Copyright>
@@ -28,6 +29,10 @@
     <ApplicationDefinition Include="src\App.xaml">
       <Generator>MSBuild:Compile</Generator>
     </ApplicationDefinition>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="assets\icon.ico" LogicalName="MsgImageExtractor.icon.ico" />
   </ItemGroup>
 
   <ItemGroup>

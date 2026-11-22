@@ -56,11 +56,20 @@ public partial class App : System.Windows.Application
         base.OnStartup(e);
 
         // 1. Single-instance check
+        var launchedMinimized = e.Args.Any(a =>
+            string.Equals(a, StartupRegistration.MinimizedArg, StringComparison.OrdinalIgnoreCase));
+
         _mutex = new Mutex(initiallyOwned: true, MutexName, out var createdNew);
         if (!createdNew)
         {
-            // Another instance is running — exit silently
+            // Another instance is running. Tell the user where it is, unless this is
+            // a silent auto-start launch.
+            if (!launchedMinimized)
+                System.Windows.MessageBox.Show(
+                    "MSG Image Extractor is already running.\nLook for its icon in the system tray (you may need to click ^ to see it).",
+                    "Already Running", MessageBoxButton.OK, MessageBoxImage.Information);
             _mutex.Dispose();
+            _mutex = null;
             Shutdown(0);
             return;
         }
@@ -76,6 +85,10 @@ public partial class App : System.Windows.Application
         // 4. Logger (opened after directory creation)
         _logger = new Logger(LogsDir);
         _logger.Info("Application starting.");
+
+        // Keep the Run-key entry pointing at the current exe path
+        if (_settings.StartWithWindows && !StartupRegistration.Apply(true, out var regError))
+            _logger.Warning($"Could not refresh Start with Windows entry: {regError}");
 
         // 5. Sentinel pruning (foreground)
         PruneSentinels();
@@ -102,6 +115,8 @@ public partial class App : System.Windows.Application
         else
         {
             StartMonitoring();
+            if (!launchedMinimized)
+                _notifications.ShowInfo("Running in the system tray. Right-click the icon for options.");
         }
     }
 
@@ -120,20 +135,28 @@ public partial class App : System.Windows.Application
         win.Show();
     }
 
-    private SettingsWindow CreateSettingsWindow() =>
-        new SettingsWindow(_settings!, _queue, ProcessedDir);
+    private SettingsWindow CreateSettingsWindow()
+    {
+        var win = new SettingsWindow(_settings!, _queue, ProcessedDir);
+        win.ProcessExistingRequested += OnProcessExisting;
+        return win;
+    }
 
     // -------------------------------------------------------------------------
     // Start monitoring
     // -------------------------------------------------------------------------
 
+    private bool _monitoringStarted;
+
     private void StartMonitoring()
     {
+        if (_monitoringStarted) return;
+        _monitoringStarted = true;
+
         _trayIcon!.SetConfigured(true, DateTime.Now);
 
         _queue!.Start();
-        _watcher!.FileDetected += path => _queue.Enqueue(path);
-        _watcher.Start(_settings!.WatchedFolder, _settings.IncludeSubdirectories);
+        _watcher!.Start(_settings!.WatchedFolder, _settings.IncludeSubdirectories);
 
         _logger!.Info($"Monitoring started: {_settings.WatchedFolder}");
     }
@@ -144,6 +167,9 @@ public partial class App : System.Windows.Application
 
     private void WireEvents()
     {
+        // Watcher → queue (subscribed once here, not in StartMonitoring)
+        _watcher!.FileDetected += path => _queue!.Enqueue(path);
+
         // Queue → tray status refresh
         _queue!.ExtractionCompleted += _ => RefreshTrayStatus();
         _queue.QueueCountChanged += _ => RefreshTrayStatus();
@@ -156,6 +182,7 @@ public partial class App : System.Windows.Application
         // Tray → app actions
         _trayIcon!.PauseRequested += OnPause;
         _trayIcon.ResumeRequested += OnResume;
+        _trayIcon.ProcessExistingRequested += OnProcessExisting;
         _trayIcon.ExtractFromFolderRequested += OnExtractFromFolder;
         _trayIcon.SettingsRequested += () => CreateSettingsWindow().Show();
         _trayIcon.ExitRequested += () => Shutdown();
@@ -203,6 +230,66 @@ public partial class App : System.Windows.Application
         if (_watcher is not null && _settings is not null)
             _watcher.Start(_settings.WatchedFolder, _settings.IncludeSubdirectories);
         _logger?.Info("Monitoring resumed.");
+    }
+
+    // -------------------------------------------------------------------------
+    // Process existing files in the watched folder
+    // -------------------------------------------------------------------------
+
+    private int _scanInProgress;
+
+    private async void OnProcessExisting()
+    {
+        var folder = _settings?.WatchedFolder;
+        if (string.IsNullOrEmpty(folder) || _queue is null || !_monitoringStarted)
+        {
+            _notifications?.ShowWarning("Set a watched folder in Settings first.");
+            return;
+        }
+        if (!Directory.Exists(folder))
+        {
+            _notifications?.ShowWarning($"Watched folder not found: {folder}");
+            return;
+        }
+        if (Interlocked.Exchange(ref _scanInProgress, 1) == 1)
+        {
+            _notifications?.ShowInfo("Already processing existing files.");
+            return;
+        }
+
+        try
+        {
+            var option = _settings!.IncludeSubdirectories
+                ? SearchOption.AllDirectories
+                : SearchOption.TopDirectoryOnly;
+
+            // Scan + enqueue off the UI thread; EnqueueAsync waits for queue space
+            // instead of dropping, so large folders are fully processed.
+            int queued = await Task.Run(async () =>
+            {
+                int n = 0;
+                foreach (var path in Directory.EnumerateFiles(folder, "*.msg", option))
+                {
+                    await _queue.EnqueueAsync(path).ConfigureAwait(false);
+                    n++;
+                }
+                return n;
+            });
+
+            _logger?.Info($"Process existing: queued {queued} file(s) from {folder}");
+            _notifications?.ShowInfo(queued == 0
+                ? "No .msg files found in the watched folder."
+                : $"Queued {queued} existing .msg file{(queued == 1 ? "" : "s")}. Already-processed files will be skipped.");
+        }
+        catch (Exception ex)
+        {
+            _logger?.Error($"Process existing failed: {ex.Message}");
+            _notifications?.ShowWarning($"Could not scan watched folder: {ex.Message}");
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _scanInProgress, 0);
+        }
     }
 
     // -------------------------------------------------------------------------

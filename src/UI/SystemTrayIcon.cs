@@ -16,6 +16,7 @@ public sealed class SystemTrayIcon : IDisposable
     // Context menu items
     private readonly ToolStripMenuItem _statusItem;
     private readonly ToolStripMenuItem _pauseResumeItem;
+    private readonly ToolStripMenuItem _processExistingItem;
     private readonly ToolStripMenuItem _extractFromFolderItem;
     private readonly ToolStripMenuItem _settingsItem;
     private readonly ToolStripMenuItem _exitItem;
@@ -28,6 +29,7 @@ public sealed class SystemTrayIcon : IDisposable
     // Events raised to App orchestrator
     public event Action? PauseRequested;
     public event Action? ResumeRequested;
+    public event Action? ProcessExistingRequested;
     public event Action? ExtractFromFolderRequested;
     public event Action? SettingsRequested;
     public event Action? ExitRequested;
@@ -41,8 +43,13 @@ public sealed class SystemTrayIcon : IDisposable
         // Build context menu
         _statusItem = new ToolStripMenuItem("Monitoring...") { Enabled = false };
         _pauseResumeItem = new ToolStripMenuItem("Pause", null, OnPauseResume);
+        _processExistingItem = new ToolStripMenuItem("Process Existing Files", null, OnProcessExisting)
+        {
+            ToolTipText = "Queue every .msg file already in the watched folder. Previously processed files are skipped."
+        };
         _extractFromFolderItem = new ToolStripMenuItem("Extract From Folder...", null, OnExtractFromFolder);
-        _settingsItem = new ToolStripMenuItem("Settings", null, OnSettings);
+        _settingsItem = new ToolStripMenuItem("Settings...", null, OnSettings);
+        _settingsItem.Font = new System.Drawing.Font(_settingsItem.Font, System.Drawing.FontStyle.Bold); // double-click default
         _exitItem = new ToolStripMenuItem("Exit", null, OnExit);
 
         var menu = new ContextMenuStrip();
@@ -51,6 +58,7 @@ public sealed class SystemTrayIcon : IDisposable
             _statusItem,
             new ToolStripSeparator(),
             _pauseResumeItem,
+            _processExistingItem,
             _extractFromFolderItem,
             new ToolStripSeparator(),
             _settingsItem,
@@ -59,6 +67,9 @@ public sealed class SystemTrayIcon : IDisposable
         });
 
         _notifyIcon.ContextMenuStrip = menu;
+        // A NotifyIcon with no Icon is never shown by Windows — always assign one.
+        _notifyIcon.Icon = LoadTrayIcon();
+        _notifyIcon.DoubleClick += OnSettings;
         _notifyIcon.Text = "MSG Image Extractor";
         _notifyIcon.Visible = true;
     }
@@ -74,6 +85,7 @@ public sealed class SystemTrayIcon : IDisposable
             _since = since.Value;
 
         _pauseResumeItem.Visible = configured;
+        _processExistingItem.Visible = configured;
         RefreshStatus(0, 0, 0, 0, 0);
     }
 
@@ -154,6 +166,35 @@ public sealed class SystemTrayIcon : IDisposable
     // -------------------------------------------------------------------------
     // Menu handlers
     // -------------------------------------------------------------------------
+
+    private static System.Drawing.Icon LoadTrayIcon()
+    {
+        try
+        {
+            // 1. Icon embedded in the assembly (assets/icon.ico)
+            using var stream = typeof(SystemTrayIcon).Assembly
+                .GetManifestResourceStream("MsgImageExtractor.icon.ico");
+            if (stream is not null)
+                return new System.Drawing.Icon(stream, System.Windows.Forms.SystemInformation.SmallIconSize);
+        }
+        catch { /* fall through */ }
+
+        try
+        {
+            // 2. Icon of the running exe (ApplicationIcon)
+            var exe = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(exe))
+            {
+                var icon = System.Drawing.Icon.ExtractAssociatedIcon(exe);
+                if (icon is not null) return icon;
+            }
+        }
+        catch { /* fall back to stock icon */ }
+        return System.Drawing.SystemIcons.Application;
+    }
+
+    private void OnProcessExisting(object? sender, EventArgs e) =>
+        ProcessExistingRequested?.Invoke();
 
     private void OnExtractFromFolder(object? sender, EventArgs e) =>
         ExtractFromFolderRequested?.Invoke();

@@ -37,6 +37,22 @@ public sealed class SettingsTests : IDisposable
         Assert.False(s.ExtractInlineImages);
         Assert.False(s.RecurseEmbeddedMessages);
         Assert.True(s.DeduplicateByHash);
+        Assert.False(s.StartWithWindows);
+    }
+
+    [Fact]
+    public void StartWithWindows_RoundTrips()
+    {
+        var s = new Settings { StartWithWindows = true };
+        s.SaveTo(_settingsPath);
+        Assert.True(Settings.LoadFrom(_settingsPath).StartWithWindows);
+    }
+
+    [Fact]
+    public void StartupRegistration_BuildCommand_QuotesPathAndAddsMinimizedArg()
+    {
+        var cmd = StartupRegistration.BuildCommand(@"C:\Program Files\Msg Extractor\MsgImageExtractor.exe");
+        Assert.Equal("\"C:\\Program Files\\Msg Extractor\\MsgImageExtractor.exe\" --minimized", cmd);
     }
 
     [Fact]

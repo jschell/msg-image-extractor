@@ -20,6 +20,9 @@ public partial class SettingsWindow : Window
     // Raised when WatchedFolder is set for the first time (first-run flow)
     public event Action<string>? WatchedFolderSelected;
 
+    // Raised when the user clicks "Process existing files now"
+    public event Action? ProcessExistingRequested;
+
     public SettingsWindow(Settings settings, ExtractionQueue? queue, string processedDir)
     {
         InitializeComponent();
@@ -57,6 +60,7 @@ public partial class SettingsWindow : Window
         DeduplicateCheck.IsChecked = _settings.DeduplicateByHash;
         InlineImagesCheck.IsChecked = _settings.ExtractInlineImages;
         RecurseEmbeddedCheck.IsChecked = _settings.RecurseEmbeddedMessages;
+        StartWithWindowsCheck.IsChecked = _settings.StartWithWindows;
 
         UpdateDedupLabel();
     }
@@ -174,6 +178,23 @@ public partial class SettingsWindow : Window
         _settings.Save();
     }
 
+    private void StartWithWindows_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_initialising) return;
+        var enabled = StartWithWindowsCheck.IsChecked == true;
+        if (!StartupRegistration.Apply(enabled, out var error))
+        {
+            System.Windows.MessageBox.Show($"Could not update Windows startup setting: {error}",
+                "Start with Windows", MessageBoxButton.OK, MessageBoxImage.Warning);
+            _initialising = true;
+            StartWithWindowsCheck.IsChecked = _settings.StartWithWindows;
+            _initialising = false;
+            return;
+        }
+        _settings.StartWithWindows = enabled;
+        _settings.Save();
+    }
+
     private void ResetHistory_Click(object sender, RoutedEventArgs e)
     {
         var result = System.Windows.MessageBox.Show(
@@ -195,6 +216,17 @@ public partial class SettingsWindow : Window
             System.Windows.MessageBox.Show($"Failed to clear history: {ex.Message}",
                 "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private void ProcessExisting_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(_settings.WatchedFolder))
+        {
+            System.Windows.MessageBox.Show("Choose a watched folder first.", "Process Existing Files",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        ProcessExistingRequested?.Invoke();
     }
 
     private void ClearDedupCache_Click(object sender, RoutedEventArgs e)

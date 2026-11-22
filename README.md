@@ -23,15 +23,19 @@ No .NET runtime and no Outlook installation required.
 
 ## Usage
 
-Double-click `MsgImageExtractor.exe` — the app starts in the system tray.
+Double-click `MsgImageExtractor.exe` — the app starts in the system tray and keeps running there until you choose **Exit**. Closing the Settings window does not quit it. If the icon is hidden, click **^** in the taskbar notification area.
 
 | Action | How |
 |---|---|
 | First run | Settings window opens automatically; set your watched folder |
-| Set watched folder | Right-click tray icon → Settings |
-| Batch extract | Right-click tray icon → Extract From Folder… |
+| Set watched folder | Right-click tray icon → Settings... (or double-click the icon) |
+| Process files already in the watched folder | Right-click tray icon → Process Existing Files |
+| Batch extract another folder | Right-click tray icon → Extract From Folder… |
 | Pause / Resume | Right-click tray icon → Pause / Resume |
+| Start automatically at sign-in | Settings → *Start with Windows* |
 | Exit | Right-click tray icon → Exit |
+
+With *Start with Windows* enabled, the app launches silently at sign-in (`--minimized`) and begins monitoring the watched folder. Launching it a second time shows an "already running" message instead of starting a duplicate.
 
 Images are extracted **alongside** `.msg` files by default (*SameFolder* mode). You can switch to a fixed output directory in Settings.
 
