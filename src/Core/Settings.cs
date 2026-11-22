@@ -35,6 +35,9 @@ public sealed class Settings
     public bool ExtractInlineImages { get; set; } = false;
     public bool RecurseEmbeddedMessages { get; set; } = false;
 
+    // --- Behaviour ---
+    public bool StartWithWindows { get; set; } = false;
+
     // ---------------------------------------------------------------------------
     // Serialiser options (shared)
     // ---------------------------------------------------------------------------

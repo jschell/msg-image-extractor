@@ -60,6 +60,7 @@ public partial class SettingsWindow : Window
         DeduplicateCheck.IsChecked = _settings.DeduplicateByHash;
         InlineImagesCheck.IsChecked = _settings.ExtractInlineImages;
         RecurseEmbeddedCheck.IsChecked = _settings.RecurseEmbeddedMessages;
+        StartWithWindowsCheck.IsChecked = _settings.StartWithWindows;
 
         UpdateDedupLabel();
     }
@@ -174,6 +175,23 @@ public partial class SettingsWindow : Window
     {
         if (_initialising) return;
         _settings.RecurseEmbeddedMessages = RecurseEmbeddedCheck.IsChecked == true;
+        _settings.Save();
+    }
+
+    private void StartWithWindows_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_initialising) return;
+        var enabled = StartWithWindowsCheck.IsChecked == true;
+        if (!StartupRegistration.Apply(enabled, out var error))
+        {
+            System.Windows.MessageBox.Show($"Could not update Windows startup setting: {error}",
+                "Start with Windows", MessageBoxButton.OK, MessageBoxImage.Warning);
+            _initialising = true;
+            StartWithWindowsCheck.IsChecked = _settings.StartWithWindows;
+            _initialising = false;
+            return;
+        }
+        _settings.StartWithWindows = enabled;
         _settings.Save();
     }
 

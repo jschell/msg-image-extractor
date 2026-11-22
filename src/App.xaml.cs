@@ -56,11 +56,20 @@ public partial class App : System.Windows.Application
         base.OnStartup(e);
 
         // 1. Single-instance check
+        var launchedMinimized = e.Args.Any(a =>
+            string.Equals(a, StartupRegistration.MinimizedArg, StringComparison.OrdinalIgnoreCase));
+
         _mutex = new Mutex(initiallyOwned: true, MutexName, out var createdNew);
         if (!createdNew)
         {
-            // Another instance is running — exit silently
+            // Another instance is running. Tell the user where it is, unless this is
+            // a silent auto-start launch.
+            if (!launchedMinimized)
+                System.Windows.MessageBox.Show(
+                    "MSG Image Extractor is already running.\nLook for its icon in the system tray (you may need to click ^ to see it).",
+                    "Already Running", MessageBoxButton.OK, MessageBoxImage.Information);
             _mutex.Dispose();
+            _mutex = null;
             Shutdown(0);
             return;
         }
@@ -76,6 +85,10 @@ public partial class App : System.Windows.Application
         // 4. Logger (opened after directory creation)
         _logger = new Logger(LogsDir);
         _logger.Info("Application starting.");
+
+        // Keep the Run-key entry pointing at the current exe path
+        if (_settings.StartWithWindows && !StartupRegistration.Apply(true, out var regError))
+            _logger.Warning($"Could not refresh Start with Windows entry: {regError}");
 
         // 5. Sentinel pruning (foreground)
         PruneSentinels();
@@ -102,6 +115,8 @@ public partial class App : System.Windows.Application
         else
         {
             StartMonitoring();
+            if (!launchedMinimized)
+                _notifications.ShowInfo("Running in the system tray. Right-click the icon for options.");
         }
     }
 

@@ -48,7 +48,8 @@ public sealed class SystemTrayIcon : IDisposable
             ToolTipText = "Queue every .msg file already in the watched folder. Previously processed files are skipped."
         };
         _extractFromFolderItem = new ToolStripMenuItem("Extract From Folder...", null, OnExtractFromFolder);
-        _settingsItem = new ToolStripMenuItem("Settings", null, OnSettings);
+        _settingsItem = new ToolStripMenuItem("Settings...", null, OnSettings);
+        _settingsItem.Font = new System.Drawing.Font(_settingsItem.Font, System.Drawing.FontStyle.Bold); // double-click default
         _exitItem = new ToolStripMenuItem("Exit", null, OnExit);
 
         var menu = new ContextMenuStrip();
@@ -170,6 +171,17 @@ public sealed class SystemTrayIcon : IDisposable
     {
         try
         {
+            // 1. Icon embedded in the assembly (assets/icon.ico)
+            using var stream = typeof(SystemTrayIcon).Assembly
+                .GetManifestResourceStream("MsgImageExtractor.icon.ico");
+            if (stream is not null)
+                return new System.Drawing.Icon(stream, System.Windows.Forms.SystemInformation.SmallIconSize);
+        }
+        catch { /* fall through */ }
+
+        try
+        {
+            // 2. Icon of the running exe (ApplicationIcon)
             var exe = Environment.ProcessPath;
             if (!string.IsNullOrEmpty(exe))
             {
